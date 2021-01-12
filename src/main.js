@@ -2,8 +2,7 @@ import Vue from 'vue'
 import App from './App.vue'
 
 Vue.config.productionTip = false
-window.Hls = require('hls.js');
-window.Dash = require('dash.js');
+window.Hls = require('shaka-player');
 
 new Vue({
   render: h => h(App),
