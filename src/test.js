@@ -1,4 +1,4 @@
-var CanvasBarrage = function (canvas, video, options) {
+function CanvasBarrage(canvas, video, options) {
     if (!canvas || !video) {
         return;
     }
@@ -224,8 +224,7 @@ var CanvasBarrage = function (canvas, video, options) {
             }
         }
     };
-};
-
+}
 function readXmlFile() {
     return new Promise((resolve) => {
         var fileInput = document.createElement('input');
@@ -301,18 +300,27 @@ async function getData() {
         var meta = raw["@attributes"].p;
         return {
             value,
-            time: meta.split(",")[0],
+            time: Number(meta.split(",")[0]),
         };
     }).sort((a, b) => a.time - b.time);
 }
 async function attachToBody() {
+    var video = document.getElementsByClassName("htmlvideoplayer htmlvideoplayer-moveupsubtitles")[0];
+
     var canvas = document.createElement("canvas");
     canvas.style = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;'
-
-    var video = document.getElementsByClassName("htmlvideoplayer htmlvideoplayer-moveupsubtitles")[0];
     video.parentNode.insertBefore(canvas, video);
 
     var data = await getData();
+    // var data = [{
+    //     value: 'speed设为0为非滚动',
+    //     time: 10, // 单位秒
+    //     speed: 0
+    // }, {
+    //     value: 'time控制弹幕时间，单位秒',
+    //     color: 'blue',
+    //     time: 20
+    // }];
     console.log(data);
 
     new CanvasBarrage(canvas, video, {data});
