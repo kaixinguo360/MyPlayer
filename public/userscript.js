@@ -1,3 +1,16 @@
+// ==UserScript==
+// @name         jellyfin_barrage
+// @namespace    https://example.com/
+// @version      0.1
+// @description  Add bullet comments to jellyfin web player
+// @author       Kaixinguo
+// @match        https://example.com/
+// @require      https://cdn.staticfile.org/jquery/3.4.1/jquery.min.js
+// @require      https://cdn.bootcss.com/jqueryui/1.12.1/jquery-ui.min.js
+// @grant none
+// ==/UserScript==
+
+// Copy from
 function CanvasBarrage(canvas, video, options) {
     if (!canvas || !video) {
         return;
@@ -99,7 +112,7 @@ function CanvasBarrage(canvas, video, options) {
 
             // 初始水平位置和垂直位置
             this.x = canvas.width;
-            if (speed == 0) {
+            if (speed === 0) {
                 this.x	= (this.x - this.width) / 2;
             }
             this.actualX = canvas.width;
@@ -147,7 +160,7 @@ function CanvasBarrage(canvas, video, options) {
                     barrage.inited = true;
                 }
                 barrage.x -= barrage.moveX;
-                if (barrage.moveX == 0) {
+                if (barrage.moveX === 0) {
                     // 不动的弹幕
                     barrage.actualX -= top.speed;
                 } else {
@@ -177,7 +190,7 @@ function CanvasBarrage(canvas, video, options) {
         draw();
 
         // 继续渲染
-        if (isPause == false) {
+        if (isPause === false) {
             requestAnimationFrame(render);
         }
     };
@@ -225,71 +238,74 @@ function CanvasBarrage(canvas, video, options) {
         }
     };
 }
-function readXmlFile() {
-    return new Promise((resolve) => {
-        var fileInput = document.createElement('input');
+async function readBulletsFromFile() {
 
-        fileInput.onchange = function () {
-            if (!fileInput.value) { alert('没有选择文件'); return; }
+    function readXmlFile() {
+        return new Promise((resolve) => {
+            var fileInput = document.createElement('input');
 
-            // 获取File引用:
-            var file = fileInput.files[0];
+            fileInput.onchange = function () {
+                if (!fileInput.value) { alert('没有选择文件'); return; }
 
-            // 获取File信息:
-            if (file.type !== 'text/xml') { alert('不是有效的XML文件!'); return; }
+                // 获取File引用:
+                var file = fileInput.files[0];
 
-            // 读取文件:
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                resolve(e.target.result);
+                // 获取File信息:
+                if (file.type !== 'text/xml') { alert('不是有效的XML文件!'); return; }
+
+                // 读取文件:
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    resolve(e.target.result);
+                };
+                // 以DataURL的形式读取文件:
+                reader.readAsText(file);
             };
-            // 以DataURL的形式读取文件:
-            reader.readAsText(file);
-        };
 
-        fileInput.setAttribute('id','_ef');
-        fileInput.setAttribute('type','file');
-        fileInput.setAttribute("style",'visibility:hidden');
-        //document.body.appendChild(fileInput);
+            fileInput.setAttribute('id','_ef');
+            fileInput.setAttribute('type','file');
+            fileInput.setAttribute("style",'visibility:hidden');
+            //document.body.appendChild(fileInput);
 
-        fileInput.click();
-    });
-}
-function xmlToJson(xml) {
-    // Create the return object
-    var obj = {};
-    if (xml.nodeType === 1) { // element
-        // do attributes
-        if (xml.attributes.length > 0) {
-            obj["@attributes"] = {};
-            for (var j = 0; j < xml.attributes.length; j++) {
-                var attribute = xml.attributes.item(j);
-                obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
-            }
-        }
-    } else if (xml.nodeType === 3) { // text
-        obj = xml.nodeValue;
+            fileInput.click();
+        });
     }
-    // do children
-    if (xml.hasChildNodes()) {
-        for(var i = 0; i < xml.childNodes.length; i++) {
-            var item = xml.childNodes.item(i);
-            var nodeName = item.nodeName;
-            if (typeof(obj[nodeName]) == "undefined") {
-                obj[nodeName] = xmlToJson(item);
-            } else {
-                if (typeof(obj[nodeName].length) == "undefined") {
-                    var old = obj[nodeName];
-                    obj[nodeName] = [];
-                    obj[nodeName].push(old);
+
+    function xmlToJson(xml) {
+        // Create the return object
+        var obj = {};
+        if (xml.nodeType === 1) { // element
+            // do attributes
+            if (xml.attributes.length > 0) {
+                obj["@attributes"] = {};
+                for (var j = 0; j < xml.attributes.length; j++) {
+                    var attribute = xml.attributes.item(j);
+                    obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
                 }
-                obj[nodeName].push(xmlToJson(item));
+            }
+        } else if (xml.nodeType === 3) { // text
+            obj = xml.nodeValue;
+        }
+        // do children
+        if (xml.hasChildNodes()) {
+            for(var i = 0; i < xml.childNodes.length; i++) {
+                var item = xml.childNodes.item(i);
+                var nodeName = item.nodeName;
+                if (typeof(obj[nodeName]) == "undefined") {
+                    obj[nodeName] = xmlToJson(item);
+                } else {
+                    if (typeof(obj[nodeName].length) == "undefined") {
+                        var old = obj[nodeName];
+                        obj[nodeName] = [];
+                        obj[nodeName].push(old);
+                    }
+                    obj[nodeName].push(xmlToJson(item));
+                }
             }
         }
+        return obj;
     }
-    return obj;
-}
-async function getData() {
+
     var data = await readXmlFile();
     var xmlDoc = await new DOMParser().parseFromString(data,"text/xml");
     var json = xmlToJson(xmlDoc);
@@ -305,25 +321,64 @@ async function getData() {
     }).sort((a, b) => a.time - b.time);
 }
 async function attachToBody() {
+
+    // get video element
     var video = document.getElementsByClassName("htmlvideoplayer htmlvideoplayer-moveupsubtitles")[0];
 
+    // create canvas element
     var canvas = document.createElement("canvas");
     canvas.style = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;'
     video.parentNode.insertBefore(canvas, video);
 
-    var data = await getData();
-    // var data = [{
-    //     value: 'speed设为0为非滚动',
-    //     time: 10, // 单位秒
-    //     speed: 0
-    // }, {
-    //     value: 'time控制弹幕时间，单位秒',
-    //     color: 'blue',
-    //     time: 20
-    // }];
-    console.log(data);
+    // get bullets
+    var bullets = await readBulletsFromFile();
 
-    new CanvasBarrage(canvas, video, {data});
+    return new CanvasBarrage(canvas, video, {data: bullets});
+}
+// attachToBody();
+
+function attachCanvas(video) {
+
+    // Create canvas element
+    var canvas = document.createElement("canvas");
+    canvas.style.position = 'absolute'
+    canvas.style.top = '0'
+    canvas.style.left = '0'
+    canvas.style.width = '100%'
+    canvas.style.height = '100%'
+    canvas.style['z-index'] = '1'
+    video.parentNode.insertBefore(canvas, video);
+
+    return canvas;
 }
 
-attachToBody();
+async function init() {
+    // Add button
+    var aaa = a;
+
+    // Get video element
+    var video = document.getElementById("videoBarrage");
+
+    // Create canvas element
+    var canvas = document.createElement("canvas");
+    canvas.style = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;'
+    video.parentNode.insertBefore(canvas, video);
+
+    // Get bullets
+    var bullets = await readBulletsFromFile();
+
+    console.log(bullets)
+
+    return new CanvasBarrage(canvas, video, {data: bullets});
+}
+
+window.onload = () => {// Get video element
+    var video = document.getElementById("videoBarrage");
+    var canvas = attachCanvas(video)
+    var context = canvas.getContext('2d')
+    context.shadowColor = 'rgba(0,0,0,1)';
+    context.shadowBlur = 2;
+    // 填色
+    context.fillText("this.value", 100, 100);
+};
+
