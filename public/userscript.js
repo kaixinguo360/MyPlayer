@@ -12,10 +12,12 @@ class BulletSource {
     }
 
     start() {
+        console.log(` >>>>>>>>>> 开始 [${this.current}] <<<<<<<<<<`)
         this.pause = false;
     }
 
     stop() {
+        console.log(` <<<<<<<<<< 暂停 [${this.current}] >>>>>>>>>>`)
         this.pause = true;
     }
 
@@ -39,7 +41,7 @@ class BulletSource {
         if (time < nextBullet.time) {
             return null;
         }
-        console.log(`[${time}] 发送弹幕: [${this.current}] ${nextBullet.text}`, nextBullet)
+        console.log(`[${time}] 发送弹幕: [${this.current}] ${nextBullet.text}`)
         this.current++;
         return nextBullet;
     }
@@ -210,10 +212,12 @@ class Screen {
         // 清除画布
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
         // 新增弹幕
-        let nextBullet = this.source.next(this.time);
-        while (nextBullet) {
-            this.bulletInstances.push(new BulletInstance(nextBullet, this.canvas));
-            nextBullet = this.source.next(this.time);
+        if (!this.video.seeking) {
+            let nextBullet = this.source.next(this.time);
+            while (nextBullet) {
+                this.bulletInstances.push(new BulletInstance(nextBullet, this.canvas));
+                nextBullet = this.source.next(this.time);
+            }
         }
         // 更新并绘制弹幕
         this.bulletInstances.forEach(instance => {
