@@ -2,6 +2,7 @@ class BulletSource {
 
     bullets = [];
     current = 0;
+    pause = false;
 
     constructor(bullets) {
         if (!(bullets instanceof Array)) {
@@ -10,14 +11,27 @@ class BulletSource {
         this.bullets = bullets;
     }
 
+    start() {
+        this.pause = false;
+    }
+
+    stop() {
+        this.pause = true;
+    }
+
     seek(time) {
+        const fromTime = this.current;
         this.current = 0;
-        while (this.bullets[this.current].time < time) {
+        while (this.bullets[this.current].time < time && this.current < this.bullets.length) {
             this.current++;
         }
+        console.log(`[${time}] ////////////// 跳转 [${fromTime}] --> [${this.current}] //////////////`)
     }
 
     next(time) {
+        if (this.pause) {
+            return null;
+        }
         if (this.current >= this.bullets.length) {
             return null;
         }
@@ -25,6 +39,7 @@ class BulletSource {
         if (time < nextBullet.time) {
             return null;
         }
+        console.log(`[${time}] 发送弹幕: [${this.current}] ${nextBullet.text}`)
         this.current++;
         return nextBullet;
     }
@@ -49,31 +64,31 @@ class BulletInstance {
 
     static default = {
         speed: 2,
-        range: 10,
-        opacity: 1,
+        range: [0, 1],
+        opacity: 100,
     };
 
-    bullet = new Bullet();
+    bullet = null;
     options = {};
 
     constructor(bullet, canvas, options) {
         this.bullet = bullet;
-        this.options = options;
+        this.options = options || {};
 
         // 速度
-        this.speed = (options.speed || Bullet.default.speed) + bullet.text.length / 100;
+        this.speed = (this.options.speed || BulletInstance.default.speed) + bullet.text.length / 100;
 
         // 字号大小
         this.fontSize = bullet.size;
 
         // 文字颜色
-        this.color = bullet.color;
+        this.color = 'white'//bullet.color; TODO
 
         // range范围
-        this.range = options.range || Bullet.default.range;
+        this.range = this.options.range || BulletInstance.default.range;
 
         // 透明度
-        this.opacity = (options.opacity || Bullet.default.opacity) / 100;
+        this.opacity = (this.options.opacity || BulletInstance.default.opacity) / 100;
 
         // 内容长度
         const span = document.createElement('span');
@@ -100,7 +115,7 @@ class BulletInstance {
         }
     }
 
-    update(time, context) {
+    update(time) {
         if (!this.disabled && this.time <= time) {
             this.x -= this.speed;
             if (this.bullet.type === 4 || this.bullet.type === 5) {
@@ -116,8 +131,6 @@ class BulletInstance {
                 // 该弹幕不运动
                 this.disabled = true;
             }
-            // 根据新位置绘制圆圈圈
-            this.draw(context);
         }
     }
 
@@ -137,11 +150,192 @@ class BulletInstance {
 
 class Screen {
 
+    bulletInstances = [];
     video = null;
+    source = null;
+    canvas = null;
+    context = null;
+    time = 0;
+    isPause = false;
 
-    constructor(video) {
+    constructor(video, source) {
+        this.bulletInstances.length = 0;
         this.video = video;
+        this.source = source;
+
+        // Create canvas
+        this.canvas = document.createElement("canvas");
+        this.canvas.style.position = 'absolute'
+        this.canvas.style.top = '0'
+        this.canvas.style.left = '0'
+        this.canvas.style.width = '100%'
+        this.canvas.style.height = '100%'
+        this.canvas.style['z-index'] = '1'
+        this.canvas.style['pointer-events'] = 'none';
+        video.parentNode.insertBefore(this.canvas, video);
+
+        this.context = this.canvas.getContext('2d');
+        this.canvas.width = this.canvas.clientWidth;
+        this.canvas.height = this.canvas.clientHeight;
+        this.time = video.currentTime;
+
+        // 视频处理
+        video.addEventListener('play', () => {
+            this.isPause = false;
+            this.render();
+        });
+        video.addEventListener('pause', () => {
+            this.isPause = true;
+        });
+        video.addEventListener('seeking', () => {
+            this.source.stop();
+        });
+        video.addEventListener('seeked', () => {
+            this.source.start();
+            this.seek();
+        });
+    }
+
+    seek() {
+        this.time = this.video.currentTime;
+        // 画布清除
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // My
+        this.source.seek(this.time);
+    }
+
+    render() {
+        // 更新已经播放时间
+        this.time = this.video.currentTime;
+        // 清除画布
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // 新增弹幕
+        let nextBullet = this.source.next(this.time);
+        while (nextBullet) {
+            this.bulletInstances.push(new BulletInstance(nextBullet, this.canvas));
+            nextBullet = this.source.next(this.time);
+        }
+        // 更新并绘制弹幕
+        this.bulletInstances.forEach(instance => {
+            instance.update();
+            instance.draw(this.context);
+        });
+        // 继续渲染
+        if (this.isPause === false) {
+            requestAnimationFrame(() => this.render());
+        }
     }
 }
 
-new Bullet(raw["#text"], raw["@attributes"].p)
+async function getBulletSourceFromFile() {
+
+    function readXmlFile() {
+        return new Promise((resolve) => {
+            const fileInput = document.createElement('input');
+
+            fileInput.onchange = function () {
+                if (!fileInput.value) { alert('没有选择文件'); return; }
+
+                // 获取File引用:
+                const file = fileInput.files[0];
+
+                // 获取File信息:
+                if (file.type !== 'text/xml') { alert('不是有效的XML文件!'); return; }
+
+                // 读取文件:
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    resolve(e.target.result);
+                };
+                // 以DataURL的形式读取文件:
+                reader.readAsText(file);
+            };
+
+            fileInput.setAttribute('id','_ef');
+            fileInput.setAttribute('type','file');
+            fileInput.setAttribute("style",'visibility:hidden');
+            //document.body.appendChild(fileInput);
+
+            fileInput.click();
+        });
+    }
+
+    function xmlToJson(xml) {
+        // Create the return object
+        let obj = {};
+        if (xml.nodeType === 1) { // element
+            // do attributes
+            if (xml.attributes.length > 0) {
+                obj["@attributes"] = {};
+                for (let j = 0; j < xml.attributes.length; j++) {
+                    const attribute = xml.attributes.item(j);
+                    obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
+                }
+            }
+        } else if (xml.nodeType === 3) { // text
+            obj = xml.nodeValue;
+        }
+        // do children
+        if (xml.hasChildNodes()) {
+            for(let i = 0; i < xml.childNodes.length; i++) {
+                const item = xml.childNodes.item(i);
+                const nodeName = item.nodeName;
+                if (typeof(obj[nodeName]) == "undefined") {
+                    obj[nodeName] = xmlToJson(item);
+                } else {
+                    if (typeof(obj[nodeName].length) == "undefined") {
+                        const old = obj[nodeName];
+                        obj[nodeName] = [];
+                        obj[nodeName].push(old);
+                    }
+                    obj[nodeName].push(xmlToJson(item));
+                }
+            }
+        }
+        return obj;
+    }
+
+    const data = await readXmlFile();
+    const xmlDoc = await new DOMParser().parseFromString(data, "text/xml");
+    const json = xmlToJson(xmlDoc);
+    const raws = json.i.d;
+
+    return new BulletSource(
+        raws
+        .filter(raw => raw !== null)
+        .map(raw => new Bullet(raw["#text"], raw["@attributes"].p))
+        .sort((a, b) => a.time - b.time)
+    );
+}
+
+async function init(video) {
+    const source = await getBulletSourceFromFile();
+    new Screen(video, source);
+}
+
+function attachButton(video) {
+
+    const button = document.createElement("button");
+    button.style.position = 'absolute'
+    button.style.top = '10px'
+    button.style.left = '10px'
+    button.style.width = '30px'
+    button.style.height = '30px'
+    button.style['z-index'] = '100'
+    video.parentNode.insertBefore(button, video);
+
+    return button;
+}
+
+window.onload = function () {
+    const videos = [];
+    document.querySelectorAll("video").forEach(video => videos.push({
+        video: video,
+        init: () => { init(video) }
+    }))
+    if (videos.length === 1) {
+        const button = attachButton(document.body)
+        button.onclick = videos[0].init;
+    }
+}
+
