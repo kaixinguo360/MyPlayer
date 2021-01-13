@@ -87,30 +87,29 @@ async function CanvasBarrage(video) {
 
         return raws.filter(raw => raw !== null).map(raw => {
             const value = raw["#text"];
-            const meta = raw["@attributes"].p.split(",");
+            const meta = raw["@attributes"].p;
             return {
-                value, // 弹幕内容
-                time: Number(meta[0]), // 弹幕在视频里的时间
-                type: Number(meta[1]), // 弹幕类型 (1,4,5,6,[7],[9])
-                size: Number(meta[2]), // 字体大小
-                color: meta[3], // 十进制的RGB颜色 (16进制转10进制)
-                timestamp: meta[4], // 弹幕发送时间戳 (unix时间戳)
-                pool: meta[5], // 弹幕池
-                uid_crc32: meta[6], // 发送者uid的crc32
-                row_id: meta[7], // 标记顺序和历史弹幕
+                value,
+                time: Number(meta.split(",")[0]),
             };
         }).sort((a, b) => a.time - b.time);
     }
 
     function CanvasBarrage(video, options) {
 
-        // Check Input Args //
-        if (!video) {
-            throw "Input video element is null";
-        }
-        options = options || {};
+        if (!video) { throw "Input video element is null"; }
 
-        // Default Params //
+        // Create canvas
+        const canvas = document.createElement("canvas");
+        canvas.style.position = 'absolute'
+        canvas.style.top = '0'
+        canvas.style.left = '0'
+        canvas.style.width = '100%'
+        canvas.style.height = '100%'
+        canvas.style['z-index'] = '1'
+        canvas.style['pointer-events'] = 'none';
+        video.parentNode.insertBefore(canvas, video);
+
         const defaults = {
             opacity: 100,
             fontSize: 24,
@@ -120,18 +119,7 @@ async function CanvasBarrage(video) {
             data: []
         };
 
-        // Create Canvas //
-        const canvas = document.createElement("canvas");
-        canvas.style = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            pointer-events: none;
-        `;
-        video.parentNode.insertBefore(canvas, video);
+        options = options || {};
 
         const params = {};
         // 参数合并
@@ -148,7 +136,7 @@ async function CanvasBarrage(video) {
         const data = top.data;
 
         if (!data || !data.length) {
-            throw "No bullets found";
+            return;
         }
 
         const context = canvas.getContext('2d');
@@ -164,6 +152,7 @@ async function CanvasBarrage(video) {
         let time = video.currentTime;
 
         // 字号大小
+        // eslint-disable-next-line no-unused-vars
         const fontSize = 28;
 
         // 实例方法
@@ -174,8 +163,14 @@ async function CanvasBarrage(video) {
             // data中的可以覆盖全局的设置
             this.init = function () {
                 // 1. 速度
-                let speed = obj.speed + obj.value.length / 100; // 随着字数不同，速度会有微调
-
+                let speed = top.speed;
+                if (obj.speed !== undefined) {
+                    speed = obj.speed;
+                }
+                if (speed !== 0) {
+                    // 随着字数不同，速度会有微调
+                    speed = speed + obj.value.length / 100;
+                }
                 // 2. 字号大小
                 const fontSize = obj.fontSize || top.fontSize;
 
@@ -193,9 +188,9 @@ async function CanvasBarrage(video) {
 
                 // 4. range范围
                 const range = obj.range || top.range;
-
                 // 5. 透明度
-                let opacity = (obj.opacity || top.opacity) / 100;
+                let opacity = obj.opacity || top.opacity;
+                opacity = opacity / 100;
 
                 // 计算出内容长度
                 const span = document.createElement('span');
@@ -337,17 +332,13 @@ async function CanvasBarrage(video) {
                 }
             }
         };
+
+        canvas.style['pointer-events'] = 'none';
     }
 
-
-
-    // Create CanvasBarrage
-    const c = new CanvasBarrage(video, canvas, {
+    return  new CanvasBarrage(video, {
         data: await readBulletsFromFile()
     });
-    canvas.style['pointer-events'] = 'none';
-
-    return c;
 }
 
 function attachButton(video) {
