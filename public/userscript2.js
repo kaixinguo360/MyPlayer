@@ -39,7 +39,7 @@ class BulletSource {
         if (time < nextBullet.time) {
             return null;
         }
-        console.log(`[${time}] 发送弹幕: [${this.current}] ${nextBullet.text}`)
+        console.log(`[${time}] 发送弹幕: [${this.current}] ${nextBullet.text}`, nextBullet)
         this.current++;
         return nextBullet;
     }
@@ -52,7 +52,7 @@ class Bullet {
         this.time = Number(meta[0]); // 弹幕在视频里的时间
         this.type = Number(meta[1]); // 弹幕类型 (1;4;5;6;[7];[9])
         this.size = Number(meta[2]); // 字体大小
-        this.color = meta[3]; // 十进制的RGB颜色 (16进制转10进制)
+        this.color = '#' + Number(meta[3]).toString(16); // 十进制的RGB颜色 (16进制转10进制)
         this.timestamp = Number(meta[4]); // 弹幕发送时间戳 (unix时间戳)
         this.pool = meta[5]; // 弹幕池
         this.uid_crc32 = meta[6]; // 发送者uid的crc32
@@ -82,7 +82,7 @@ class BulletInstance {
         this.fontSize = bullet.size;
 
         // 文字颜色
-        this.color = 'white'//bullet.color; TODO
+        this.color = bullet.color;
 
         // range范围
         this.range = this.options.range || BulletInstance.default.range;
@@ -95,14 +95,14 @@ class BulletInstance {
         span.style.position = 'absolute';
         span.style.whiteSpace = 'nowrap';
         span.style.font = 'bold ' + this.fontSize + 'px "microsoft yahei", sans-serif';
-        span.innerText = this.text;
-        span.textContent = this.text;
+        span.innerText = this.bullet.text;
+        span.textContent = this.bullet.text;
         document.body.appendChild(span);
         this.width = span.clientWidth; // 求得文字内容宽度
         document.body.removeChild(span); // 移除dom元素
 
         // 初始水平位置和垂直位置
-        if (bullet.type === 4 || bullet.type === 5) {
+        if (bullet.type === 40 || bullet.type === 50) {
             this.x = (this.x - this.width) / 2; // 顶部或底部弹幕
         } else {
             this.x = canvas.width; // 滚动弹幕
@@ -115,10 +115,10 @@ class BulletInstance {
         }
     }
 
-    update(time) {
-        if (!this.disabled && this.time <= time) {
+    update() {
+        if (!this.disabled) {
             this.x -= this.speed;
-            if (this.bullet.type === 4 || this.bullet.type === 5) {
+            if (this.bullet.type === 40 || this.bullet.type === 50) {
                 // 不动的弹幕
                 this.actualX -= top.speed;
             } else {
@@ -220,6 +220,8 @@ class Screen {
             instance.update();
             instance.draw(this.context);
         });
+        // 删除弹幕
+        this.bulletInstances = this.bulletInstances.filter(i => !i.disabled);
         // 继续渲染
         if (this.isPause === false) {
             requestAnimationFrame(() => this.render());
