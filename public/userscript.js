@@ -1,3 +1,29 @@
+// ==UserScript==
+// @name         Add 'BulletScreen' to any video element
+// @name:zh-CN   为任意视频播放器添加弹幕功能
+// @description         Add 'BulletScreen' to any video element
+// @description:zh-CN   一切皆可弹幕 - 为任意视频播放器添加本地弹幕支持
+// @version      0.0.1
+// @author       Kaixinguo
+// @match        <all_urls>
+// @include      *
+// @grant        none
+// ==/UserScript==
+
+// You can use Chrome to translate the comments in this scripts.
+
+// 脚本假设:
+//  1. 网页内只有一个video元素
+//  2. 目标video元素有一个与其大小相同的父容器
+
+// 弹幕格式:
+//  仅支持从哔哩哔哩导出的XML格式的本地弹幕
+
+// 目前存在的问题:
+//  1. 悬浮按钮位置与常见网页的返回按钮重叠
+//  2. 无任何屏蔽/缩放/定位等弹幕管理功能, "放养"式弹幕
+
+// 弹幕源, 用于存储所有弹幕
 class BulletSource {
 
     bullets = [];
@@ -60,10 +86,7 @@ class BulletSource {
             return;
         }
 
-        if () {
-
-        }
-        let cur = oldIndex ? oldIndex : 1;
+        let cur = (oldIndex !== 0) ? oldIndex : ((this.bullets.length >= 1) ? 1 : 0);
         let seekCount = 0;
         while ((cur - 1) >= 0 && cur < this.bullets.length) {
             console.log(cur)
@@ -118,6 +141,8 @@ class BulletSource {
     }
 }
 
+// 弹幕数据, 用于存储单条弹幕的内容与元数据
+// 每条即为一条从XML文件中读取的弹幕
 class Bullet {
     constructor(text, attributes) {
         const meta = attributes.split(",");
@@ -133,6 +158,8 @@ class Bullet {
     }
 }
 
+// 弹幕实例, 用于实际绘制操作
+// 每条即为一条正在屏幕上渲染的弹幕实例
 class BulletInstance {
 
     static default = {
@@ -221,7 +248,9 @@ class BulletInstance {
     }
 }
 
-class Screen {
+// 封装过的弹幕播放器对象
+// 传入目标video元素与弹幕源即可实现弹幕功能
+class BulletScreen {
 
     bulletInstances = [];
     video = null;
@@ -238,13 +267,15 @@ class Screen {
 
         // Create canvas
         this.canvas = document.createElement("canvas");
-        this.canvas.style.position = 'absolute'
-        this.canvas.style.top = '0'
-        this.canvas.style.left = '0'
-        this.canvas.style.width = '100%'
-        this.canvas.style.height = '100%'
-        this.canvas.style['z-index'] = '1'
-        this.canvas.style['pointer-events'] = 'none';
+        this.canvas.style = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        `;
         video.parentNode.insertBefore(this.canvas, video);
 
         this.context = this.canvas.getContext('2d');
@@ -252,30 +283,34 @@ class Screen {
         this.canvas.height = this.canvas.clientHeight;
         this.time = video.currentTime;
 
-        // 视频处理
+        // Listen video events
         video.addEventListener('play', () => this.videoPlayEventHandler());
         video.addEventListener('pause', () => this.videoPauseEventHandler());
         video.addEventListener('seeking', () => this.videoSeekingEventHandler());
         video.addEventListener('seeked', () => this.videoSeekedEventHandler());
+
+        if (video.paused === false) {
+            this.videoPlayEventHandler();
+        }
     }
 
     videoPlayEventHandler() {
-        console.log("[Screen] 开始播放")
+        console.log("[BulletScreen] 开始播放")
         this.isPause = false;
         this.render();
     }
 
     videoPauseEventHandler() {
-        console.log("[Screen] 暂停播放")
+        console.log("[BulletScreen] 暂停播放")
         this.isPause = true;
     }
 
     videoSeekingEventHandler() {
-        console.log("[Screen] 定位中...")
+        console.log("[BulletScreen] 定位中...")
     }
 
     videoSeekedEventHandler() {
-        console.log("[Screen] 定位成功")
+        console.log("[BulletScreen] 定位成功")
         this.time = this.video.currentTime;
     }
 
@@ -306,6 +341,7 @@ class Screen {
     }
 }
 
+// 从XML文件创建弹幕源
 async function getBulletSourceFromFile() {
 
     function readXmlFile() {
@@ -381,40 +417,55 @@ async function getBulletSourceFromFile() {
 
     return new BulletSource(
         raws
-        .filter(raw => raw !== null)
-        .map(raw => new Bullet(raw["#text"], raw["@attributes"].p))
-        .sort((a, b) => a.time - b.time)
+            .filter(raw => raw !== null)
+            .map(raw => new Bullet(raw["#text"], raw["@attributes"].p))
+            .sort((a, b) => a.time - b.time)
     );
 }
 
-async function init(video) {
+async function initBulletScreen(video) {
     const source = await getBulletSourceFromFile();
-    new Screen(video, source);
+    new BulletScreen(video, source);
 }
 
-function attachButton(video) {
-
-    const button = document.createElement("button");
-    button.style.position = 'absolute'
-    button.style.top = '10px'
-    button.style.left = '10px'
-    button.style.width = '30px'
-    button.style.height = '30px'
-    button.style['z-index'] = '100'
-    video.parentNode.insertBefore(button, video);
-
-    return button;
-}
-
-window.onload = function () {
+function selectTargetVideo() {
     const videos = [];
     document.querySelectorAll("video").forEach(video => videos.push({
         video: video,
-        init: () => { init(video) }
+        init: () => { initBulletScreen(video) }
     }))
-    if (videos.length === 1) {
-        const button = attachButton(document.body)
-        button.onclick = videos[0].init;
+    if (videos.length === 0) {
+        alert("页面中没有video元素, 无法启用弹幕功能");
+    } else if (videos.length === 1) {
+        console.log("[Init] 页面中有一个video元素, 支持此页面");
+        videos[0].init();
+    } else {
+        alert("页面中有一个以上video元素, 暂时不想支持此类页面");
     }
 }
+
+function initUI() {
+    const button = document.createElement("button");
+    button.onclick = selectTargetVideo;
+    button.innerText = "弹"
+    button.style = `
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        width: 30px;
+        height: 30px;
+        z-index: 10000000000000;
+        text-align: center;
+        font: 400 13.3333px Arial;
+        border-style: none;
+        border-radius: 5px;
+        color: #ffffffe6;
+        background-color: #d4d4d4cc;
+        cursor: pointer;
+    `;
+    document.body.parentElement.insertBefore(button, document.body);
+    console.log("[Init] Created Button: ", button)
+}
+
+initUI()
 
