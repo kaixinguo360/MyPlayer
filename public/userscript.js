@@ -12,13 +12,8 @@ class BulletSource {
     }
 
     next(time) {
-        if (!(time - 10 < this.currentTime && this.currentTime <= time)) {
-            console.log(`[BulletSource] t=${time} cur=${this.currentTime} now=${time} 超过时间间隔阈值, 重新定位...`)
-            this.seek(time);
-        }
+        this.seek(time);
         this.currentTime = time;
-        if (this.currentTime > time || (time - this.currentTime) < 10) { //TODO: Magic Number: 10
-        }
         if (this.currentIndex >= this.bullets.length) {
             return null;
         }
@@ -31,18 +26,95 @@ class BulletSource {
         return nextBullet;
     }
 
+    // 定位
     seek(time) {
+
+        // 两次请求时间间隔指定秒数内 -> 无跳转
+        if (time - 0.5 < this.currentTime && this.currentTime <= time) {
+            return;
+        }
+
+        let d = Math.abs(this.currentTime - time);
+        console.log(`[BulletSource] t=${time} cur=${this.currentTime} now=${time} d=${d} 超过时间间隔阈值, 重新定位...`);
+
+        // 查找算法选择
+        if (d > 10) {
+            // 超出指定秒数 -> 折半查找
+            this.binarySearch(time);
+        } else {
+            // 否则 -> 顺序查找
+            this.sequentialSearch(time);
+        }
+    }
+
+    // 顺序查找
+    sequentialSearch(time) {
         const oldIndex = this.currentIndex;
+
+        let direction = 0;
         if (time < this.currentTime) {
-            this.currentIndex = 0;
+            direction = -1;
+        } else if (time > this.currentTime) {
+            direction = 1;
+        } else {
+            return;
         }
-        let tmpCount = 0;
-        while (this.bullets[this.currentIndex].time < time && this.currentIndex < this.bullets.length) {
-            this.currentIndex++;
-            tmpCount++;
+
+        if () {
+
         }
+        let cur = oldIndex ? oldIndex : 1;
+        let seekCount = 0;
+        while ((cur - 1) >= 0 && cur < this.bullets.length) {
+            console.log(cur)
+            if (this.bullets[cur - 1].time <= time && time < this.bullets[cur].time) {
+                break;
+            } else {
+                cur = cur + direction;
+            }
+            seekCount++;
+        }
+
+        this.currentIndex = cur;
         this.currentTime = time;
-        console.log(`[BulletSource] t=${time} 已重定位, 指针移动次数${tmpCount} [${oldIndex}] --> [${this.currentIndex}]`)
+        console.log(`[BulletSource] t=${time} 已重定位, 顺序查找次数${seekCount} [${oldIndex}] --> [${this.currentIndex}]`)
+    }
+
+    // 折半查找
+    binarySearch(time) {
+        const oldIndex = this.currentIndex;
+
+        let low = 0, high = this.bullets.length - 1;
+        if (this.bullets[oldIndex].time < time) {
+            low = oldIndex;
+        } else if (time < this.bullets[oldIndex].time) {
+            high = oldIndex;
+        } else {
+            this.currentIndex = oldIndex;
+            this.currentTime = time;
+            return;
+        }
+        let mid = Math.floor((low + high) / 2);
+
+        let seekCount = 0;
+        while ((mid - 1) >= 0 && mid < this.bullets.length) {
+            console.log(mid)
+            if (time < this.bullets[mid - 1].time) {
+                high = mid;
+                mid = Math.floor((low + high) / 2);
+            } else if (this.bullets[mid].time < time) {
+                low = mid;
+                mid = Math.floor((low + high) / 2);
+            } else {
+                break;
+            }
+            seekCount++;
+            if (seekCount > 50) break // 最大折半查找次数, (2^50 = 1125899906842624)
+        }
+
+        this.currentIndex = mid;
+        this.currentTime = time;
+        console.log(`[BulletSource] t=${time} 已重定位, 折半查找次数${seekCount} [${oldIndex}] --> [${this.currentIndex}]`)
     }
 }
 
