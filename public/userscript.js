@@ -1,8 +1,8 @@
 class BulletSource {
 
     bullets = [];
-    current = 0;
-    pause = false;
+    currentIndex = 0;
+    currentTime = 0;
 
     constructor(bullets) {
         if (!(bullets instanceof Array)) {
@@ -11,39 +11,38 @@ class BulletSource {
         this.bullets = bullets;
     }
 
-    start() {
-        console.log(` >>>>>>>>>> 开始 [${this.current}] <<<<<<<<<<`)
-        this.pause = false;
-    }
-
-    stop() {
-        console.log(` <<<<<<<<<< 暂停 [${this.current}] >>>>>>>>>>`)
-        this.pause = true;
-    }
-
-    seek(time) {
-        const fromTime = this.current;
-        this.current = 0;
-        while (this.bullets[this.current].time < time && this.current < this.bullets.length) {
-            this.current++;
-        }
-        console.log(`[${time}] ////////////// 跳转 [${fromTime}] --> [${this.current}] //////////////`)
-    }
-
     next(time) {
-        if (this.pause) {
+        if (!(time - 10 < this.currentTime && this.currentTime <= time)) {
+            console.log(`[BulletSource] t=${time} cur=${this.currentTime} now=${time} 超过时间间隔阈值, 重新定位...`)
+            this.seek(time);
+        }
+        this.currentTime = time;
+        if (this.currentTime > time || (time - this.currentTime) < 10) { //TODO: Magic Number: 10
+        }
+        if (this.currentIndex >= this.bullets.length) {
             return null;
         }
-        if (this.current >= this.bullets.length) {
-            return null;
-        }
-        const nextBullet = this.bullets[this.current];
+        const nextBullet = this.bullets[this.currentIndex];
         if (time < nextBullet.time) {
             return null;
         }
-        console.log(`[${time}] 发送弹幕: [${this.current}] ${nextBullet.text}`)
-        this.current++;
+        console.log(`[BulletSource] t=${time} 发送弹幕: [${this.currentIndex}] ${nextBullet.text}`)
+        this.currentIndex++;
         return nextBullet;
+    }
+
+    seek(time) {
+        const oldIndex = this.currentIndex;
+        if (time < this.currentTime) {
+            this.currentIndex = 0;
+        }
+        let tmpCount = 0;
+        while (this.bullets[this.currentIndex].time < time && this.currentIndex < this.bullets.length) {
+            this.currentIndex++;
+            tmpCount++;
+        }
+        this.currentTime = time;
+        console.log(`[BulletSource] t=${time} 已重定位, 指针移动次数${tmpCount} [${oldIndex}] --> [${this.currentIndex}]`)
     }
 }
 
@@ -182,28 +181,30 @@ class Screen {
         this.time = video.currentTime;
 
         // 视频处理
-        video.addEventListener('play', () => {
-            this.isPause = false;
-            this.render();
-        });
-        video.addEventListener('pause', () => {
-            this.isPause = true;
-        });
-        video.addEventListener('seeking', () => {
-            this.source.stop();
-        });
-        video.addEventListener('seeked', () => {
-            this.source.start();
-            this.seek();
-        });
+        video.addEventListener('play', () => this.videoPlayEventHandler());
+        video.addEventListener('pause', () => this.videoPauseEventHandler());
+        video.addEventListener('seeking', () => this.videoSeekingEventHandler());
+        video.addEventListener('seeked', () => this.videoSeekedEventHandler());
     }
 
-    seek() {
+    videoPlayEventHandler() {
+        console.log("[Screen] 开始播放")
+        this.isPause = false;
+        this.render();
+    }
+
+    videoPauseEventHandler() {
+        console.log("[Screen] 暂停播放")
+        this.isPause = true;
+    }
+
+    videoSeekingEventHandler() {
+        console.log("[Screen] 定位中...")
+    }
+
+    videoSeekedEventHandler() {
+        console.log("[Screen] 定位成功")
         this.time = this.video.currentTime;
-        // 画布清除
-        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        // My
-        this.source.seek(this.time);
     }
 
     render() {
