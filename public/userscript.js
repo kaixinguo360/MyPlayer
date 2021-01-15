@@ -163,31 +163,29 @@ class BulletInstance {
 
     static default = {
         speed: 2,
-        range: [0, 1],
+        range: [0, 0.8],
         opacity: 100,
     };
 
     bullet = null;
-    options = {};
 
     constructor(bullet, canvas, options) {
         this.bullet = bullet;
-        this.options = options || {};
 
         // 速度
-        this.speed = (this.options.speed || BulletInstance.default.speed) + bullet.text.length / 100;
+        this.speed = (options.speed || BulletInstance.default.speed) + bullet.text.length / 100;
 
         // 字号大小
-        this.fontSize = bullet.size;
+        this.fontSize = bullet.size * (options.size ? options.size : 1);
 
         // 文字颜色
         this.color = bullet.color;
 
         // range范围
-        this.range = this.options.range || BulletInstance.default.range;
+        this.range = options.range || BulletInstance.default.range;
 
         // 透明度
-        this.opacity = (this.options.opacity || BulletInstance.default.opacity) / 100;
+        this.opacity = (options.opacity || BulletInstance.default.opacity) / 100;
 
         // 内容长度
         const span = document.createElement('span');
@@ -258,11 +256,22 @@ class BulletScreen {
     context = null;
     time = 0;
     isPause = false;
+    config = {
+        limit: 50,
+        speed: 2,
+        range: [0, 0.8],
+        opacity: 100,
+        size: 1,
+    };
 
     constructor(video, source) {
         this.bulletInstances.length = 0;
         this.video = video;
         this.source = source;
+
+        if (window.localStorage.getItem("BulletScreenConfig")) {
+            this.config = JSON.parse(window.localStorage.getItem("BulletScreenConfig"));
+        }
 
         // Create canvas
         this.canvas = document.createElement("canvas");
@@ -313,26 +322,42 @@ class BulletScreen {
         this.time = this.video.currentTime;
     }
 
+    addBulletInstance(bullet) {
+        if (this.bulletInstances.length < this.config.limit) {
+            const nextBulletInstance = new BulletInstance(bullet, this.canvas, this.config);
+            this.bulletInstances.push(nextBulletInstance);
+            return nextBulletInstance;
+        }
+    }
+
+    setConfig(key, value) {
+        this.config[key] = value;
+        window.localStorage.setItem("BulletScreenConfig", JSON.stringify(this.config));
+    }
+
     render() {
         // 更新已经播放时间
         this.time = this.video.currentTime;
         // 清除画布
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // 更新弹幕
+        this.bulletInstances.forEach(instance => {
+            instance.update();
+        });
+        // 删除弹幕
+        this.bulletInstances = this.bulletInstances.filter(i => !i.disabled);
         // 新增弹幕
         if (!this.video.seeking) {
             let nextBullet = this.source.next(this.time);
             while (nextBullet) {
-                this.bulletInstances.push(new BulletInstance(nextBullet, this.canvas));
+                this.addBulletInstance(nextBullet);
                 nextBullet = this.source.next(this.time);
             }
         }
-        // 更新并绘制弹幕
+        // 绘制弹幕
         this.bulletInstances.forEach(instance => {
-            instance.update();
             instance.draw(this.context);
         });
-        // 删除弹幕
-        this.bulletInstances = this.bulletInstances.filter(i => !i.disabled);
         // 继续渲染
         if (this.isPause === false) {
             requestAnimationFrame(() => this.render());
@@ -424,7 +449,41 @@ async function getBulletSourceFromFile() {
 
 async function initBulletScreen(video) {
     const source = await getBulletSourceFromFile();
-    new BulletScreen(video, source);
+    const screen = new BulletScreen(video, source);
+
+    // Limit Config
+    const limitButton = addButton(screen.config.limit, {top: 10, left: 50, width: 30, height: 30})
+    function setLimit(value) {
+        value = Math.max(0, value);
+        screen.setConfig("limit", value);
+        limitButton.innerText = value;
+    }
+    addButton("+",
+        {top: 50, left: 50, width: 30, height: 30},
+        () => setLimit(screen.config.limit + 10)
+    );
+    addButton("-",
+        {top: 85, left: 50, width: 30, height: 30},
+        () => setLimit(screen.config.limit - 10)
+    );
+
+    // Range Config
+    const rangeButton = addButton(screen.config.range[1] * 100, {top: 10, left: 90, width: 30, height: 30})
+    function setRange(value) {
+        value = Math.max(0, value);
+        value = Math.min(1, value);
+        value = Math.round(value * 100) / 100;
+        screen.setConfig("range", [0, value]);
+        rangeButton.innerText = value * 100;
+    }
+    addButton("+",
+        {top: 50, left: 90, width: 30, height: 30},
+        () => setRange(screen.config.range[1] + 0.05)
+    );
+    addButton("-",
+        {top: 85, left: 90, width: 30, height: 30},
+        () => setRange(screen.config.range[1] - 0.05)
+    );
 }
 
 function selectTargetVideo() {
@@ -443,15 +502,16 @@ function selectTargetVideo() {
     }
 }
 
-function initUI() {
+const buttons = [];
+function addButton(title, options, onclick) {
     const button = document.createElement("button");
-    button.innerText = "弹"
+    button.innerText = title;
     button.style = `
         position: fixed;
-        top: 10px;
-        left: 10px;
-        width: 30px;
-        height: 30px;
+        top: ${options.top}px;
+        left: ${options.left}px;
+        width: ${options.width}px;
+        height: ${options.height}px;
         z-index: 10000000000000;
         text-align: center;
         font: 400 13.3333px Arial;
@@ -462,22 +522,22 @@ function initUI() {
         cursor: pointer;
     `;
     button.hidden = true;
-    button.onblur = () => {
-        button.hidden = true;
-    };
-    button.onclick = () => {
-        selectTargetVideo();
-        button.hidden = true;
-    };
+    button.onclick = onclick;
     document.body.parentElement.insertBefore(button, document.body);
+    buttons.push(button);
+    return button;
+}
+
+function initUI() {
+    addButton("弹", {top: 10, left: 10, width: 30, height: 30}, selectTargetVideo);
     document.body.parentElement.onkeydown = (e) => {
         if (e.code === 'ControlLeft') {
-            button.hidden = false;
+            buttons.forEach(button => button.hidden = false);
         }
     }
     document.body.parentElement.onkeyup = (e) => {
         if (e.code === 'ControlLeft') {
-            button.hidden = true;
+            buttons.forEach(button => button.hidden = true);
         }
     }
     console.log("[BulletScreen] Init UI")
