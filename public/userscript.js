@@ -20,8 +20,7 @@
 //  仅支持从哔哩哔哩导出的XML格式的本地弹幕
 
 // 目前存在的问题:
-//  1. 悬浮按钮位置与常见网页的返回按钮重叠
-//  2. 无任何屏蔽/缩放/定位等弹幕管理功能, "放养"式弹幕
+//  1. 无任何屏蔽/缩放/定位等弹幕管理功能, "放养"式弹幕
 
 // 弹幕源, 用于存储所有弹幕
 class BulletSource {
@@ -446,7 +445,6 @@ function selectTargetVideo() {
 
 function initUI() {
     const button = document.createElement("button");
-    button.onclick = selectTargetVideo;
     button.innerText = "弹"
     button.style = `
         position: fixed;
@@ -459,12 +457,30 @@ function initUI() {
         font: 400 13.3333px Arial;
         border-style: none;
         border-radius: 5px;
-        color: #ffffffe6;
-        background-color: #d4d4d4cc;
+        color: #ffffff;
+        background-color: #00a1d6;
         cursor: pointer;
     `;
+    button.hidden = true;
+    button.onblur = () => {
+        button.hidden = true;
+    };
+    button.onclick = () => {
+        selectTargetVideo();
+        button.hidden = true;
+    };
     document.body.parentElement.insertBefore(button, document.body);
-    console.log("[Init] Created Button: ", button)
+    document.body.parentElement.onkeydown = (e) => {
+        if (e.code === 'ControlLeft') {
+            button.hidden = false;
+        }
+    }
+    document.body.parentElement.onkeyup = (e) => {
+        if (e.code === 'ControlLeft') {
+            button.hidden = true;
+        }
+    }
+    console.log("[BulletScreen] Init UI")
 }
 
 initUI()
