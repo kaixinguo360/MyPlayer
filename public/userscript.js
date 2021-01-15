@@ -16,11 +16,16 @@
 //  1. 网页内只有一个video元素
 //  2. 目标video元素有一个与其大小相同的父容器
 
+// 使用方法:
+//  按住左Ctrl键不放, 网页左上角会显示出一个"弹"按钮, 点击即可打开本地弹幕选择对话框
+
 // 弹幕格式:
 //  仅支持从哔哩哔哩导出的XML格式的本地弹幕
 
 // 目前存在的问题:
 //  1. 无任何屏蔽/缩放/定位等弹幕管理功能, "放养"式弹幕
+
+// ------- Class ------- //
 
 // 弹幕源, 用于存储所有弹幕
 class BulletSource {
@@ -138,6 +143,88 @@ class BulletSource {
         this.currentTime = time;
         console.log(`[BulletSource] t=${time} 已重定位, 折半查找次数${seekCount} [${oldIndex}] --> [${this.currentIndex}]`)
     }
+}
+
+// 从XML文件创建弹幕源
+async function getBulletSourceFromFile() {
+
+    function readXmlFile() {
+        return new Promise((resolve) => {
+            const fileInput = document.createElement('input');
+
+            fileInput.onchange = function () {
+                if (!fileInput.value) { alert('没有选择文件'); return; }
+
+                // 获取File引用:
+                const file = fileInput.files[0];
+
+                // 获取File信息:
+                if (file.type !== 'text/xml') { alert('不是有效的XML文件!'); return; }
+
+                // 读取文件:
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    resolve(e.target.result);
+                };
+                // 以DataURL的形式读取文件:
+                reader.readAsText(file);
+            };
+
+            fileInput.setAttribute('id','_ef');
+            fileInput.setAttribute('type','file');
+            fileInput.setAttribute("style",'visibility:hidden');
+            //document.body.appendChild(fileInput);
+
+            fileInput.click();
+        });
+    }
+
+    function xmlToJson(xml) {
+        // Create the return object
+        let obj = {};
+        if (xml.nodeType === 1) { // element
+            // do attributes
+            if (xml.attributes.length > 0) {
+                obj["@attributes"] = {};
+                for (let j = 0; j < xml.attributes.length; j++) {
+                    const attribute = xml.attributes.item(j);
+                    obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
+                }
+            }
+        } else if (xml.nodeType === 3) { // text
+            obj = xml.nodeValue;
+        }
+        // do children
+        if (xml.hasChildNodes()) {
+            for(let i = 0; i < xml.childNodes.length; i++) {
+                const item = xml.childNodes.item(i);
+                const nodeName = item.nodeName;
+                if (obj[nodeName] === undefined) {
+                    obj[nodeName] = xmlToJson(item);
+                } else {
+                    if (!(obj[nodeName] instanceof Array)) {
+                        const old = obj[nodeName];
+                        obj[nodeName] = [];
+                        obj[nodeName].push(old);
+                    }
+                    obj[nodeName].push(xmlToJson(item));
+                }
+            }
+        }
+        return obj;
+    }
+
+    const data = await readXmlFile();
+    const xmlDoc = await new DOMParser().parseFromString(data, "text/xml");
+    const json = xmlToJson(xmlDoc);
+    const raws = json.i.d;
+
+    return new BulletSource(
+        raws
+            .filter(raw => raw !== null)
+            .map(raw => new Bullet(raw["#text"], raw["@attributes"].p))
+            .sort((a, b) => a.time - b.time)
+    );
 }
 
 // 弹幕数据, 用于存储单条弹幕的内容与元数据
@@ -262,6 +349,7 @@ class BulletScreen {
         range: [0, 0.8],
         opacity: 100,
         size: 1,
+        display: true,
     };
 
     constructor(video, source) {
@@ -355,9 +443,11 @@ class BulletScreen {
             }
         }
         // 绘制弹幕
-        this.bulletInstances.forEach(instance => {
-            instance.draw(this.context);
-        });
+        if (this.config.display) {
+            this.bulletInstances.forEach(instance => {
+                instance.draw(this.context);
+            });
+        }
         // 继续渲染
         if (this.isPause === false) {
             requestAnimationFrame(() => this.render());
@@ -365,144 +455,19 @@ class BulletScreen {
     }
 }
 
-// 从XML文件创建弹幕源
-async function getBulletSourceFromFile() {
-
-    function readXmlFile() {
-        return new Promise((resolve) => {
-            const fileInput = document.createElement('input');
-
-            fileInput.onchange = function () {
-                if (!fileInput.value) { alert('没有选择文件'); return; }
-
-                // 获取File引用:
-                const file = fileInput.files[0];
-
-                // 获取File信息:
-                if (file.type !== 'text/xml') { alert('不是有效的XML文件!'); return; }
-
-                // 读取文件:
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    resolve(e.target.result);
-                };
-                // 以DataURL的形式读取文件:
-                reader.readAsText(file);
-            };
-
-            fileInput.setAttribute('id','_ef');
-            fileInput.setAttribute('type','file');
-            fileInput.setAttribute("style",'visibility:hidden');
-            //document.body.appendChild(fileInput);
-
-            fileInput.click();
-        });
+// ------- UI Utils ------- //
+const attachedElements = [];
+document.body.parentElement.onkeydown = (e) => {
+    if (e.code === 'ControlLeft') {
+        attachedElements.forEach(button => button.hidden = false);
     }
-
-    function xmlToJson(xml) {
-        // Create the return object
-        let obj = {};
-        if (xml.nodeType === 1) { // element
-            // do attributes
-            if (xml.attributes.length > 0) {
-                obj["@attributes"] = {};
-                for (let j = 0; j < xml.attributes.length; j++) {
-                    const attribute = xml.attributes.item(j);
-                    obj["@attributes"][attribute.nodeName] = attribute.nodeValue;
-                }
-            }
-        } else if (xml.nodeType === 3) { // text
-            obj = xml.nodeValue;
-        }
-        // do children
-        if (xml.hasChildNodes()) {
-            for(let i = 0; i < xml.childNodes.length; i++) {
-                const item = xml.childNodes.item(i);
-                const nodeName = item.nodeName;
-                if (obj[nodeName] === undefined) {
-                    obj[nodeName] = xmlToJson(item);
-                } else {
-                    if (!(obj[nodeName] instanceof Array)) {
-                        const old = obj[nodeName];
-                        obj[nodeName] = [];
-                        obj[nodeName].push(old);
-                    }
-                    obj[nodeName].push(xmlToJson(item));
-                }
-            }
-        }
-        return obj;
-    }
-
-    const data = await readXmlFile();
-    const xmlDoc = await new DOMParser().parseFromString(data, "text/xml");
-    const json = xmlToJson(xmlDoc);
-    const raws = json.i.d;
-
-    return new BulletSource(
-        raws
-            .filter(raw => raw !== null)
-            .map(raw => new Bullet(raw["#text"], raw["@attributes"].p))
-            .sort((a, b) => a.time - b.time)
-    );
 }
-
-async function initBulletScreen(video) {
-    const source = await getBulletSourceFromFile();
-    const screen = new BulletScreen(video, source);
-
-    // Limit Config
-    const limitButton = addButton(screen.config.limit, {top: 10, left: 50, width: 30, height: 30})
-    function setLimit(value) {
-        value = Math.max(0, value);
-        screen.setConfig("limit", value);
-        limitButton.innerText = value;
-    }
-    addButton("+",
-        {top: 50, left: 50, width: 30, height: 30},
-        () => setLimit(screen.config.limit + 10)
-    );
-    addButton("-",
-        {top: 85, left: 50, width: 30, height: 30},
-        () => setLimit(screen.config.limit - 10)
-    );
-
-    // Range Config
-    const rangeButton = addButton(screen.config.range[1] * 100, {top: 10, left: 90, width: 30, height: 30})
-    function setRange(value) {
-        value = Math.max(0, value);
-        value = Math.min(1, value);
-        value = Math.round(value * 100) / 100;
-        screen.setConfig("range", [0, value]);
-        rangeButton.innerText = value * 100;
-    }
-    addButton("+",
-        {top: 50, left: 90, width: 30, height: 30},
-        () => setRange(screen.config.range[1] + 0.05)
-    );
-    addButton("-",
-        {top: 85, left: 90, width: 30, height: 30},
-        () => setRange(screen.config.range[1] - 0.05)
-    );
-}
-
-function selectTargetVideo() {
-    const videos = [];
-    document.querySelectorAll("video").forEach(video => videos.push({
-        video: video,
-        init: () => { initBulletScreen(video) }
-    }))
-    if (videos.length === 0) {
-        alert("页面中没有video元素, 无法启用弹幕功能");
-    } else if (videos.length === 1) {
-        console.log("[Init] 页面中有一个video元素, 支持此页面");
-        videos[0].init();
-    } else {
-        alert("页面中有一个以上video元素, 暂时不想支持此类页面");
+document.body.parentElement.onkeyup = (e) => {
+    if (e.code === 'ControlLeft') {
+        attachedElements.forEach(button => button.hidden = true);
     }
 }
 
-const buttons = [];
 function addButton(title, options, onclick) {
     const button = document.createElement("button");
     button.innerText = title;
@@ -524,22 +489,93 @@ function addButton(title, options, onclick) {
     button.hidden = true;
     button.onclick = onclick;
     document.body.parentElement.insertBefore(button, document.body);
-    buttons.push(button);
+    attachedElements.push(button);
     return button;
 }
 
+function addConfigModifier(options) {
+    function setValue(value) {
+        value = Math.max(options.minValue, value);
+        value = Math.min(options.maxValue, value);
+        value = options.filter ? options.filter(value) : value;
+        options.setter(value);
+        valueButton.innerText = `${options.title}: ${options.getter()}`;
+    }
+    const valueButton = addButton(`${options.title}: ${options.getter()}`,
+        {top: 10, left: options.left, width: 70, height: 30},
+        () => setValue(options.defaultValue ? options.defaultValue : options.getter())
+    );
+    addButton("+",
+        {top: 50, left: options.left, width: 30, height: 30},
+        () => setValue(options.getter() + options.step)
+    );
+    addButton("-",
+        {top: 50, left: options.left + 40, width: 30, height: 30},
+        () => setValue(options.getter() - options.step)
+    );
+}
+
+// ------- Main ------- //
+let bulletSource = null;
+let bulletScreen = null;
+
+async function createBulletScreen(video) {
+    bulletSource = await getBulletSourceFromFile();
+    bulletScreen = new BulletScreen(video, bulletSource);
+
+    // Limit Config
+    addConfigModifier({
+        title: "同屏",
+        left: 55,
+        minValue: 0,
+        defaultValue: 50,
+        maxValue: 1000,
+        step: 10,
+        getter: () => bulletScreen.config.limit,
+        setter: value => bulletScreen.config.limit = value,
+
+    });
+
+    // Range Config
+    addConfigModifier({
+        title: "范围",
+        left: 140,
+        minValue: 0,
+        defaultValue: 80,
+        maxValue: 100,
+        step: 5,
+        getter: () => bulletScreen.config.range[1] * 100,
+        filter: value => Math.round(value),
+        setter: value => bulletScreen.setConfig("range", [0, value / 100]),
+    });
+}
+
+function initBulletScreen() {
+    const videos = [];
+    document.querySelectorAll("video").forEach(video => videos.push({
+        video: video,
+        init: () => { createBulletScreen(video) }
+    }))
+    if (videos.length === 0) {
+        alert("页面中没有video元素, 无法启用弹幕功能");
+    } else if (videos.length === 1) {
+        console.log("[Init] 页面中有一个video元素, 支持此页面");
+        videos[0].init();
+    } else {
+        alert("页面中有一个以上video元素, 暂时不想支持此类页面");
+    }
+}
+
 function initUI() {
-    addButton("弹", {top: 10, left: 10, width: 30, height: 30}, selectTargetVideo);
-    document.body.parentElement.onkeydown = (e) => {
-        if (e.code === 'ControlLeft') {
-            buttons.forEach(button => button.hidden = false);
-        }
-    }
-    document.body.parentElement.onkeyup = (e) => {
-        if (e.code === 'ControlLeft') {
-            buttons.forEach(button => button.hidden = true);
-        }
-    }
+    addButton("弹",
+        {top: 10, left: 10, width: 30, height: 30},
+        () => {
+            if (bulletScreen === null) {
+                initBulletScreen();
+            } else {
+                bulletScreen.config.display = !bulletScreen.config.display;
+            }
+        });
     console.log("[BulletScreen] Init UI")
 }
 
