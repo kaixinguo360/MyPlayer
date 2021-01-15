@@ -394,10 +394,10 @@ async function getBulletSourceFromFile() {
             for(let i = 0; i < xml.childNodes.length; i++) {
                 const item = xml.childNodes.item(i);
                 const nodeName = item.nodeName;
-                if (typeof(obj[nodeName]) == "undefined") {
+                if (obj[nodeName] === undefined) {
                     obj[nodeName] = xmlToJson(item);
                 } else {
-                    if (typeof(obj[nodeName].length) == "undefined") {
+                    if (!(obj[nodeName] instanceof Array)) {
                         const old = obj[nodeName];
                         obj[nodeName] = [];
                         obj[nodeName].push(old);
