@@ -552,28 +552,34 @@ async function createBulletScreen(video) {
 
 function initBulletScreen() {
     const videos = [];
-    document.querySelectorAll("video").forEach(video => videos.push({
-        video: video,
-        init: () => { createBulletScreen(video) }
-    }))
+    document.querySelectorAll("video").forEach(video => videos.push(video));
     if (videos.length === 0) {
         alert("页面中没有video元素, 无法启用弹幕功能");
     } else if (videos.length === 1) {
         console.log("[Init] 页面中有一个video元素, 支持此页面");
-        videos[0].init();
+        createBulletScreen(videos[0]);
     } else {
-        alert("页面中有一个以上video元素, 暂时不想支持此类页面");
+        const playingVideos = videos.filter(video => !video.paused)
+        if (playingVideos.length === 0) {
+            alert("页面中有多个video元素, 无法确定弹幕附加目标. 请将要附加弹幕的video元素置于播放状态后重试");
+        } else if (playingVideos.length === 1) {
+            console.log("[Init] 页面中有多个video元素, 但只有一个正在播放, 支持此页面");
+            createBulletScreen(playingVideos[0]);
+        } else {
+            alert("页面中有多个video元素, 并且一个以上正在播放, 暂时不支持此类页面");
+        }
     }
 }
 
 function initUI() {
     addButton("弹",
         {top: 10, left: 10, width: 30, height: 30},
-        () => {
+        (e) => {
             if (bulletScreen === null) {
                 initBulletScreen();
             } else {
                 bulletScreen.config.display = !bulletScreen.config.display;
+                e.target.innerText = bulletScreen.config.display ? "弹" : "关";
             }
         });
     console.log("[BulletScreen] Init UI")
