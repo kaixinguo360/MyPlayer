@@ -380,35 +380,35 @@ class BulletScreen {
         this.time = video.currentTime;
 
         // Listen video events
-        video.addEventListener('play', () => this.videoPlayEventHandler());
-        video.addEventListener('pause', () => this.videoPauseEventHandler());
-        video.addEventListener('seeking', () => this.videoSeekingEventHandler());
-        video.addEventListener('seeked', () => this.videoSeekedEventHandler());
+        video.addEventListener('play', this.videoPlayEventHandler);
+        video.addEventListener('pause', this.videoPauseEventHandler);
+        video.addEventListener('seeking', this.videoSeekingEventHandler);
+        video.addEventListener('seeked', this.videoSeekedEventHandler);
 
         if (video.paused === false) {
             this.videoPlayEventHandler();
         }
     }
 
-    videoPlayEventHandler() {
+    videoPlayEventHandler = () => {
         console.log("[BulletScreen] 开始播放")
         this.isPause = false;
         this.render();
-    }
+    };
 
-    videoPauseEventHandler() {
+    videoPauseEventHandler = () => {
         console.log("[BulletScreen] 暂停播放")
         this.isPause = true;
-    }
+    };
 
-    videoSeekingEventHandler() {
+    videoSeekingEventHandler = () => {
         console.log("[BulletScreen] 定位中...")
-    }
+    };
 
-    videoSeekedEventHandler() {
+    videoSeekedEventHandler = () => {
         console.log("[BulletScreen] 定位成功")
         this.time = this.video.currentTime;
-    }
+    };
 
     addBulletInstance(bullet) {
         if (this.bulletInstances.length < this.config.limit) {
@@ -452,6 +452,15 @@ class BulletScreen {
         if (this.isPause === false) {
             requestAnimationFrame(() => this.render());
         }
+    }
+
+    disconnect() {
+        this.video.parentNode.removeChild(this.canvas);
+        this.video.removeEventListener('play', this.videoPlayEventHandler);
+        this.video.removeEventListener('pause', this.videoPauseEventHandler);
+        this.video.removeEventListener('seeking', this.videoSeekingEventHandler);
+        this.video.removeEventListener('seeked', this.videoSeekedEventHandler);
+        this.isPause = true;
     }
 }
 
@@ -524,6 +533,21 @@ async function createBulletScreen(video) {
     bulletSource = await getBulletSourceFromFile();
     bulletScreen = new BulletScreen(video, bulletSource);
 
+    // Close Button
+    addButton("关",
+        {top: 50, left: 10, width: 30, height: 30},
+        () => {
+            bulletScreen.disconnect();
+            bulletScreen = null;
+            bulletSource = null;
+            attachedElements.forEach((value, index) => {
+                if (index !== 0) {
+                    document.body.parentElement.removeChild(value);
+                }
+            });
+            attachedElements.length = 1;
+        });
+
     // Limit Config
     addConfigModifier({
         title: "同屏",
@@ -531,20 +555,19 @@ async function createBulletScreen(video) {
         minValue: 0,
         defaultValue: 50,
         maxValue: 1000,
-        step: 10,
+        step: 5,
         getter: () => bulletScreen.config.limit,
         setter: value => bulletScreen.config.limit = value,
-
     });
 
     // Range Config
     addConfigModifier({
         title: "范围",
         left: 140,
-        minValue: 0,
+        minValue: 10,
         defaultValue: 80,
         maxValue: 100,
-        step: 5,
+        step: 10,
         getter: () => bulletScreen.config.range[1] * 100,
         filter: value => Math.round(value),
         setter: value => bulletScreen.setConfig("range", [0, value / 100]),
@@ -555,12 +578,38 @@ async function createBulletScreen(video) {
         title: "字体",
         left: 225,
         minValue: 10,
-        defaultValue: 50,
+        defaultValue: 40,
         maxValue: 100,
         step: 5,
         getter: () => bulletScreen.config.size * 50,
         filter: value => Math.round(value),
         setter: value => bulletScreen.setConfig("size", value / 50),
+    });
+
+    // Speed Config
+    addConfigModifier({
+        title: "速度",
+        left: 310,
+        minValue: 20,
+        defaultValue: 50,
+        maxValue: 100,
+        step: 5,
+        getter: () => bulletScreen.config.speed * 20,
+        filter: value => Math.round(value),
+        setter: value => bulletScreen.setConfig("speed", value / 20),
+    });
+
+    // Opacity Config
+    addConfigModifier({
+        title: "透明",
+        left: 395,
+        minValue: 5,
+        defaultValue: 100,
+        maxValue: 100,
+        step: 5,
+        getter: () => bulletScreen.config.opacity,
+        filter: value => Math.round(value),
+        setter: value => bulletScreen.setConfig("opacity", value),
     });
 }
 
@@ -593,7 +642,7 @@ function initUI() {
                 initBulletScreen();
             } else {
                 bulletScreen.config.display = !bulletScreen.config.display;
-                e.target.innerText = bulletScreen.config.display ? "弹" : "关";
+                e.target.innerText = bulletScreen.config.display ? "弹" : "隐";
             }
         });
     console.log("[BulletScreen] Init UI")
