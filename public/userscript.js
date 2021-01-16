@@ -490,6 +490,7 @@ function addButton(title, options, onclick) {
     button.onclick = onclick;
     document.body.parentElement.insertBefore(button, document.body);
     attachedElements.push(button);
+    console.log(`[UI] 添加按钮: ${title}`)
     return button;
 }
 
@@ -547,6 +548,19 @@ async function createBulletScreen(video) {
         getter: () => bulletScreen.config.range[1] * 100,
         filter: value => Math.round(value),
         setter: value => bulletScreen.setConfig("range", [0, value / 100]),
+    });
+
+    // Font Size Config
+    addConfigModifier({
+        title: "字体",
+        left: 225,
+        minValue: 10,
+        defaultValue: 50,
+        maxValue: 100,
+        step: 5,
+        getter: () => bulletScreen.config.size * 50,
+        filter: value => Math.round(value),
+        setter: value => bulletScreen.setConfig("size", value / 50),
     });
 }
 
